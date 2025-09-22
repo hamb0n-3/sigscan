@@ -1,0 +1,3 @@
+password=supersecret123
+Visit https://api.example.com/v1/users
+<script src="/static/app.js"></script>

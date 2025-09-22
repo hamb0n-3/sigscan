@@ -1,0 +1,78 @@
+\
+# patternscan
+
+A scalable, plugin-driven pattern scanner that parses files recursively to extract patterns (secrets, endpoints, web artifacts, etc.) and emits reports. It also includes an `ai` mode that uses `llama_cpp` plus `secrets.json` context to draft a risk report.
+
+## Features
+- **Recursive directory scanning** and single-file scanning.
+- **Parser plugins** for file types (text, JSON, XML) selected by file extension.
+- **Pattern plugins** for categories (secrets, endpoints, web). Secrets plugin adds **entropy detection**.
+- **Config-at-top**: each plugin declares its settings (`WHITELIST`, `BLACKLIST`, `REGEXES`, thresholds) at the top of the file.
+- **Outputs** per plugin, plus global summary. `secrets.json` is always produced when `--plugin secrets` or `--plugin all` is used with the exact schema requested.
+- **AI mode**: `patternscan ai --input-file <in> --output-file <out> [--model-path <gguf>]` combines your text with `secrets.json` evidence and asks a local LLM (llama.cpp) to produce a structured report.
+
+## Installation
+```bash
+python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+pip install -r requirements.txt
+# optional install as a CLI
+pip install -e .
+```
+
+## Usage
+
+Scan a directory (recursively) with only secrets plugin:
+```bash
+patternscan dir ./ --plugin secrets
+# or without CLI install:
+python -m patternscan.cli dir ./ --plugin secrets
+```
+
+Scan a single file:
+```bash
+patternscan file /path/to/file --plugin secrets,endpoints
+```
+
+Activate all pattern plugins:
+```bash
+patternscan dir ./ --plugin all
+```
+
+AI mode (requires `llama-cpp-python` and a local GGUF model file):
+```bash
+patternscan ai --input-file ./notes.md --output-file ./ai_report.md --model-path ./models/your_model.gguf
+```
+
+### Output
+By default, outputs go to `./scan_output/` unless you pass `--out`. When the `secrets` plugin is active (or `--plugin all`), a `secrets.json` is always written with this exact schema per finding:
+```json
+{
+  "secret": "...",
+  "context": "line of the value",
+  "line_num": 123,
+  "file location": "/path/to/file",
+  "category": "secrets"
+}
+```
+
+You will also get plugin-specific JSON/Markdown files and a top-level `summary.md` and `index.json`.
+
+## Extending
+
+Add a new **parser**:
+- Create `patternscan/parsers/your_parser.py`.
+- Subclass `ParserPlugin`, set `NAME`, `SUPPORTED_EXTENSIONS`, and implement `parse(path)` to yield `ParsedRecord` items.
+
+Add a new **pattern**:
+- Create `patternscan/patterns/your_plugin.py`.
+- Subclass `PatternPlugin`, set `NAME`, `CATEGORY`, and define `WHITELIST`, `BLACKLIST`, `REGEXES`. Optionally override `write_outputs` to create custom reports.
+
+Both kinds of plugins are auto-discovered by module introspection.
+
+## Notes
+- Large/unsupported/binary files are skipped gracefully.
+- Concurrency is used for directory scanning via `ThreadPoolExecutor`.
+- JSON and XML parsers flatten structures to produce more meaningful "line-like" contexts for pattern matching.
+
+## License
+MIT
