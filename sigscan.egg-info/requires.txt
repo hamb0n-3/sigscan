@@ -1,0 +1,4 @@
+chardet>=5.1
+
+[ai]
+llama-cpp-python>=0.2.0

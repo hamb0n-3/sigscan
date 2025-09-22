@@ -1,10 +1,9 @@
-\
 [build-system]
 requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "patternscan"
+name = "sigscan"
 version = "0.1.0"
 description = "Plugin-driven recursive pattern scanner with AI mode (llama.cpp)"
 readme = "README.md"
@@ -17,4 +16,4 @@ dependencies = [
 ai = ["llama-cpp-python>=0.2.0"]
 
 [project.scripts]
-patternscan = "patternscan.cli:main"
+sigscan = "sigscan.cli:main"

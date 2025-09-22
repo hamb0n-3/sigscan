@@ -1,0 +1,14 @@
+{
+  "service": {
+    "baseUrl": "https://service.example.com/api",
+    "credentials": {
+      "password": "Pa$$w0rd!",
+      "apiKey": "AKIAABCDEFGHIJKLMNOP"
+    }
+  },
+  "notes": [
+    "one",
+    "two",
+    "three"
+  ]
+}

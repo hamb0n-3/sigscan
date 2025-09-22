@@ -1,3 +1,15 @@
+Metadata-Version: 2.4
+Name: sigscan
+Version: 0.1.0
+Summary: Plugin-driven recursive pattern scanner with AI mode (llama.cpp)
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: chardet>=5.1
+Provides-Extra: ai
+Requires-Dist: llama-cpp-python>=0.2.0; extra == "ai"
+Dynamic: license-file
+
 \
 # sigscan
 

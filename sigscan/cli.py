@@ -16,7 +16,7 @@ from .ai.ai_mode import run_ai_mode
 
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="patternscan",
+        prog="sigscan",
         description="Recursive file parser with pluggable pattern analyzers and AI mode.",
     )
     sub = p.add_subparsers(dest="mode", required=True)

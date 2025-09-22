@@ -10,13 +10,13 @@ from typing import Iterable, Iterator, Optional
 
 BINARY_BYTES = bytes(range(0, 32)) + b"\x7f"
 
-def is_likely_binary(data: bytes, threshold: float = 0.30) -> bool:
+def is_likely_binary(data: bytes, threshold: float = 0.40) -> bool:
     if not data:
         return False
     nontext = sum(1 for b in data if b in BINARY_BYTES and b not in (9, 10, 13))
     return (nontext / len(data)) > threshold
 
-def read_text_safely(path: Path, max_bytes: int = 10_000_000) -> Optional[str]:
+def read_text_safely(path: Path, max_bytes: int = 20_000_000) -> Optional[str]:
     try:
         with path.open("rb") as f:
             head = f.read(min(4096, max_bytes))

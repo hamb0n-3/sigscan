@@ -1,12 +1,61 @@
-\
 from __future__ import annotations
+
 import json
 import re
 from pathlib import Path
 from typing import Dict, List
+
 from ..core.models import ParsedRecord, Finding
 from ..core.utils import shannon_entropy, TOKEN_RE
 from .base import PatternPlugin
+
+
+DEFAULT_ASSIGNMENT_KEYWORDS = [
+    r"password",
+    r"passphrase",
+    r"secret",
+    r"secret[_-]?key",
+    r"client[_-]?secret",
+    r"consumer[_-]?secret",
+    r"credential(?:s)?",
+    r"connection[_-]?string",
+    r"api[_-]?key",
+    r"access[_-]?key",
+    r"auth[_-]?key",
+    r"token",
+    r"auth[_-]?token",
+    r"access[_-]?token",
+    r"refresh[_-]?token",
+    r"bearer[_-]?token",
+    r"session[_-]?token",
+    r"jwt",
+    r"private[_-]?key",
+    r"ssh[_-]?key",
+    r"encryption[_-]?key",
+]
+
+ASSIGNMENT_VALUE_PATTERN = r"(?:['\"]?[^\s]{6,}['\"]?)"
+
+BASE_REGEXES = [
+    re.compile(r"AKIA[0-9A-Z]{16}"),  # AWS Access Key ID
+    re.compile(r"(?i)xox[baprs]-[A-Za-z0-9\-]{10,}"),  # Slack tokens
+    re.compile(r"(?i)ghp_[A-Za-z0-9]{36}"),  # GitHub PAT
+    re.compile(r"(?i)-----BEGIN (?:RSA|OPENSSH|DSA|EC) PRIVATE KEY-----"),
+]
+
+
+def _build_assignment_regexes() -> List[re.Pattern[str]]:
+    """Compile case-insensitive assignment regexes for the configured keywords."""
+
+    return [
+        re.compile(
+            rf"(?i)[\w.\-]*(?:{kw})[\w.\-]*\s*(?:[:=]|:=)\s*{ASSIGNMENT_VALUE_PATTERN}"
+        )
+        for kw in DEFAULT_ASSIGNMENT_KEYWORDS
+    ]
+
+
+DEFAULT_REGEXES = BASE_REGEXES + _build_assignment_regexes()
 
 
 class SecretsPlugin(PatternPlugin):
@@ -21,16 +70,9 @@ class SecretsPlugin(PatternPlugin):
         "loremipsum",
     ]
     BLACKLIST = []  # lines containing any of these substrings are ignored
-    REGEXES = [
-        re.compile(r"AKIA[0-9A-Z]{16}"),  # AWS Access Key ID
-        re.compile(r"(?i)secret[_-]?key\s*[:=]\s*([A-Za-z0-9/\+=]{16,})"),
-        re.compile(r"(?i)api[_-]?key\s*[:=]\s*([A-Za-z0-9/\+=]{16,})"),
-        re.compile(r"(?i)token\s*[:=]\s*([A-Za-z0-9\.\-_]{16,})"),
-        re.compile(r"(?i)password\s*[:=]\s*([^ \t]{6,})"),
-        re.compile(r"(?i)xox[baprs]-[A-Za-z0-9\-]{10,}"),  # Slack tokens
-        re.compile(r"(?i)ghp_[A-Za-z0-9]{36}"),  # GitHub PAT
-        re.compile(r"(?i)-----BEGIN (?:RSA|OPENSSH|DSA|EC) PRIVATE KEY-----"),
-    ]
+    ASSIGNMENT_KEYWORDS = list(DEFAULT_ASSIGNMENT_KEYWORDS)
+    ASSIGNMENT_VALUE = ASSIGNMENT_VALUE_PATTERN
+    REGEXES = list(DEFAULT_REGEXES)
     # Entropy settings
     ENTROPY_MIN_LENGTH = 20
     ENTROPY_THRESHOLD = 3.5  # Shannon bits per char (heuristic)

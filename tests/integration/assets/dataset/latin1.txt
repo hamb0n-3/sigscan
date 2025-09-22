@@ -1,0 +1,1 @@
+password=segredo_ñ

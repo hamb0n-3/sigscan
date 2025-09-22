@@ -1,0 +1,8 @@
+<root>
+  <credentials>
+    <password>XmlPass12345</password>
+  </credentials>
+  <links>
+    <endpoint>https://xml.example.org/api</endpoint>
+  </links>
+</root>
