@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import fnmatch
 import logging
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
@@ -16,6 +18,7 @@ from ..patterns.base import PatternPlugin
 
 
 DEFAULT_LOGGER_NAME = "sigscan"
+SLOW_SCAN_THRESHOLD_SECONDS = 2.0
 
 
 def configure_logging(verbose: bool = False, logger_name: str = DEFAULT_LOGGER_NAME) -> logging.Logger:
@@ -79,6 +82,9 @@ class DirectoryScanner:
             self.logger.setLevel(logging.INFO)
         self.show_progress = bool(show_progress)
         self.progress_desc = progress_desc
+        self._progress_bar = None
+        self._progress_lock = threading.Lock()
+        self._slow_log_threshold = SLOW_SCAN_THRESHOLD_SECONDS
 
     def _iter_files(self) -> Iterator[Path]:
         for p in self.root.rglob("*"):
@@ -117,8 +123,11 @@ class DirectoryScanner:
         elif self.show_progress and tqdm is None:
             self.logger.info("tqdm is not installed; progress bar disabled")
 
-        with ThreadPoolExecutor(max_workers=self.workers) as ex:
-            futures = {ex.submit(self._scan_file, path): path for path in files}
+        futures = {}
+        executor = ThreadPoolExecutor(max_workers=self.workers)
+        try:
+            self._progress_bar = progress_bar
+            futures = {executor.submit(self._scan_file, path): path for path in files}
             for future in as_completed(futures):
                 path = futures[future]
                 try:
@@ -131,22 +140,36 @@ class DirectoryScanner:
                 finally:
                     if progress_bar is not None:
                         progress_bar.update(1)
-
-        if progress_bar is not None:
-            progress_bar.close()
-
-        for plugin in self.pattern_plugins.values():
-            plugin.end()
+        except KeyboardInterrupt:
+            if self.verbose:
+                self.logger.info("Scan interrupted by user; shutting down workers")
+            raise
+        finally:
+            executor.shutdown(wait=True, cancel_futures=True)
+            if progress_bar is not None:
+                progress_bar.close()
+            self._progress_bar = None
+            for plugin in self.pattern_plugins.values():
+                plugin.end()
 
     def _scan_file(self, path: Path) -> None:
         parser = _choose_parser(self.parser_plugins, path)
+        parser_name = parser.__class__.__name__
+        file_size = self._safe_file_size(path)
+        display_path = self._format_display_path(path)
+        plugin_count = len(self.pattern_plugins)
+        self._update_current_file_display(display_path, parser_name, file_size, plugin_count)
+
         for plugin in self.pattern_plugins.values():
             plugin.begin_file(path)
 
+        record_count = 0
+        start_time = time.perf_counter()
         try:
             for record in parser.parse(path):
                 for plugin in self.pattern_plugins.values():
                     plugin.process_record(record)
+                record_count += 1
         except Exception as exc:
             if self.verbose:
                 self.logger.exception("Failed while scanning %s", path)
@@ -155,6 +178,91 @@ class DirectoryScanner:
         finally:
             for plugin in self.pattern_plugins.values():
                 plugin.end_file(path)
+            duration = time.perf_counter() - start_time
+            self._maybe_log_slow_file(
+                display_path,
+                duration,
+                file_size,
+                record_count,
+                parser_name,
+                plugin_count,
+            )
+
+    def _format_display_path(self, path: Path) -> str:
+        try:
+            return str(path.relative_to(self.root))
+        except ValueError:
+            return str(path)
+
+    def _safe_file_size(self, path: Path) -> Optional[int]:
+        try:
+            return path.stat().st_size
+        except OSError as exc:
+            if self.logger.isEnabledFor(logging.DEBUG):
+                self.logger.debug("Unable to stat %s: %s", path, exc)
+            return None
+
+    def _update_current_file_display(
+        self,
+        display_path: str,
+        parser_name: str,
+        file_size: Optional[int],
+        plugin_count: int,
+    ) -> None:
+        label = display_path
+        if len(label) > 60:
+            label = f"...{label[-57:]}"
+        if self._progress_bar is not None:
+            with self._progress_lock:
+                self._progress_bar.set_postfix_str(label, refresh=False)
+                self._progress_bar.refresh()
+        if self.logger.isEnabledFor(logging.DEBUG):
+            size_str = f"{file_size:,} bytes" if file_size is not None else "unknown size"
+            self.logger.debug(
+                "Processing %s (parser=%s, %s, plugins=%d)",
+                display_path,
+                parser_name,
+                size_str,
+                plugin_count,
+            )
+        elif self.verbose:
+            self.logger.info("Processing %s", display_path)
+
+    def _maybe_log_slow_file(
+        self,
+        display_path: str,
+        duration: float,
+        file_size: Optional[int],
+        record_count: int,
+        parser_name: str,
+        plugin_count: int,
+    ) -> None:
+        if not self.logger.isEnabledFor(logging.DEBUG):
+            return
+        if duration < self._slow_log_threshold:
+            return
+
+        reasons: List[str] = []
+        if file_size is not None and file_size >= 1_000_000:
+            reasons.append("large file")
+        if record_count >= 5_000:
+            reasons.append("many parsed records")
+        if plugin_count > 3:
+            reasons.append("multiple plugins")
+        if not reasons:
+            reasons.append("parser workload")
+
+        size_str = f"{file_size:,} bytes" if file_size is not None else "unknown size"
+        self.logger.debug(
+            "Slow scan for %s took %.2fs (%s). size=%s, records=%d, parser=%s, plugins=%d",
+            display_path,
+            duration,
+            ", ".join(reasons),
+            size_str,
+            record_count,
+            parser_name,
+            plugin_count,
+        )
 
 
 class SingleFileScanner:
