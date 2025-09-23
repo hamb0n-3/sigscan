@@ -9,7 +9,7 @@ from .core.loader import (
     discover_pattern_plugins,
     select_pattern_plugins,
 )
-from .core.scanner import DirectoryScanner, SingleFileScanner
+from .core.scanner import DirectoryScanner, SingleFileScanner, configure_logging
 from .core.reporting import Reporter
 from .ai.ai_mode import run_ai_mode
 
@@ -30,12 +30,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
     d.add_argument("--include", default="*", help="Glob(s) to include, comma-separated.")
     d.add_argument("--exclude", default=".git,.venv,node_modules,venv,.tox,.mypy_cache,.pytest_cache,__pycache__", help="Dir names to exclude, comma-separated.")
     d.add_argument("--max-file-size", type=int, default=5_000_000, help="Max file size in bytes to parse (default 5MB).")
+    d.add_argument("--no-progress", action="store_true", help="Disable the progress bar during directory scans.")
+    d.add_argument("--verbose", action="store_true", help="Enable verbose logging output.")
 
     # file mode
     f = sub.add_parser("file", help="Scan a single file.")
     f.add_argument("path", type=Path, help="File to scan.")
     f.add_argument("--plugin", default="secrets", help="Comma-delimited pattern plugins to activate or 'all'.")
     f.add_argument("--out", type=Path, default=Path("./scan_output"), help="Output directory.")
+    f.add_argument("--verbose", action="store_true", help="Enable verbose logging output.")
 
     # ai mode
     a = sub.add_parser("ai", help="Run AI summarization/analysis using llama_cpp and secrets.json for context.")
@@ -69,6 +72,9 @@ def run_dir(args: argparse.Namespace) -> int:
         exclude_dirs=[e.strip() for e in args.exclude.split(",") if e.strip()],
         max_file_size=args.max_file_size,
         workers=args.workers,
+        logger=configure_logging(verbose=args.verbose),
+        verbose=args.verbose,
+        show_progress=not args.no_progress,
     )
     scanner.scan()
 
@@ -92,6 +98,8 @@ def run_file(args: argparse.Namespace) -> int:
         file_path=args.path,
         parser_plugins=parser_plugins,
         pattern_plugins=activated,
+        logger=configure_logging(verbose=args.verbose),
+        verbose=args.verbose,
     )
     scanner.scan()
 
