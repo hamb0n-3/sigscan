@@ -49,7 +49,7 @@ def _build_assignment_regexes() -> List[re.Pattern[str]]:
 
     return [
         re.compile(
-            rf"(?i)[\w.\-]*(?:{kw})[\w.\-]*\s*(?:[:=]|:=)\s*{ASSIGNMENT_VALUE_PATTERN}"
+            rf"(?i)[^\n]*(?:{kw})[\w.\-]*\s*(?:[:=]|:=)\s*{ASSIGNMENT_VALUE_PATTERN}"
         )
         for kw in DEFAULT_ASSIGNMENT_KEYWORDS
     ]
