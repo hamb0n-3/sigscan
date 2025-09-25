@@ -67,12 +67,14 @@ class DirectoryScanner:
         verbose: bool = False,
         show_progress: bool = True,
         progress_desc: str = "Scanning files",
+        exclude_file_globs: Optional[List[str]] = None,
     ) -> None:
         self.root = root
         self.parser_plugins = parser_plugins
         self.pattern_plugins = pattern_plugins
         self.include_globs = include_globs
         self.exclude_dirs = set(exclude_dirs)
+        self.exclude_file_globs = list(exclude_file_globs or [])
         self.max_file_size = max_file_size
         self.workers = workers
         base_logger = logger or logging.getLogger(DEFAULT_LOGGER_NAME)
@@ -96,6 +98,11 @@ class DirectoryScanner:
                 else:
                     continue
             if any(fnmatch.fnmatch(p.name, pat) for pat in self.include_globs):
+                if self.exclude_file_globs and any(
+                    fnmatch.fnmatch(p.name, pat) or fnmatch.fnmatch(str(p), pat)
+                    for pat in self.exclude_file_globs
+                ):
+                    continue
                 try:
                     if p.stat().st_size <= self.max_file_size:
                         yield p

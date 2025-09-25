@@ -1,20 +1,36 @@
 \
 from __future__ import annotations
 import io
-import os
 import re
 import math
 import chardet  # type: ignore
 from pathlib import Path
-from typing import Iterable, Iterator, Optional
+from typing import Iterator, Optional
 
 BINARY_BYTES = bytes(range(0, 32)) + b"\x7f"
+JAVA_SERIAL_MAGIC = b"\xac\xed"
 
-def is_likely_binary(data: bytes, threshold: float = 0.40) -> bool:
+def is_likely_binary(
+    data: bytes, control_threshold: float = 0.30, high_bit_threshold: float = 0.60
+) -> bool:
     if not data:
         return False
-    nontext = sum(1 for b in data if b in BINARY_BYTES and b not in (9, 10, 13))
-    return (nontext / len(data)) > threshold
+    total = len(data)
+    if 0 in data:
+        return True
+    if data.startswith(JAVA_SERIAL_MAGIC):
+        return True
+    control = sum(1 for b in data if b in BINARY_BYTES and b not in (9, 10, 13))
+    if (control / total) > control_threshold:
+        return True
+    high = sum(1 for b in data if b >= 0x80)
+    if (high / total) > high_bit_threshold:
+        return True
+    try:
+        data.decode('utf-8', errors='strict')
+    except UnicodeDecodeError:
+        return True
+    return False
 
 def read_text_safely(path: Path, max_bytes: int = 20_000_000) -> Optional[str]:
     try:
@@ -24,8 +40,19 @@ def read_text_safely(path: Path, max_bytes: int = 20_000_000) -> Optional[str]:
                 return None
             rest = f.read(max_bytes - len(head))
             data = head + rest
-        enc = chardet.detect(data).get("encoding") or "utf-8"
-        return data.decode(enc, errors="replace")
+        if is_likely_binary(data):
+            return None
+        enc = chardet.detect(data).get("encoding")
+        candidates = []
+        if enc:
+            candidates.append(enc)
+        candidates.append('utf-8')
+        for candidate in candidates:
+            try:
+                return data.decode(candidate, errors='strict')
+            except (LookupError, UnicodeDecodeError):
+                continue
+        return None
     except Exception:
         return None
 

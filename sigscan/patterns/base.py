@@ -18,6 +18,7 @@ class PatternPlugin:
     NAME: str = "base"
     CATEGORY: str = "general"
     DEFAULT_OUTPUT_STYLES: List[str] = ["json", "md"]
+    MAX_RECORD_CHARS: int = 200_000
     # Settings (override in subclasses)
     WHITELIST: List[str] = []
     BLACKLIST: List[str] = []
@@ -42,6 +43,8 @@ class PatternPlugin:
     # Streaming API: feed parsed records
     def process_record(self, record: ParsedRecord) -> None:
         text = record.text
+        if len(text) > self.MAX_RECORD_CHARS:
+            return
         # apply blacklist early
         for pattern in self.BLACKLIST:
             if pattern in text:

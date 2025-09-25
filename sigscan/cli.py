@@ -28,7 +28,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     d.add_argument("--out", type=Path, default=Path("./scan_output"), help="Output directory.")
     d.add_argument("--workers", type=int, default=8, help="Number of worker threads for scanning.")
     d.add_argument("--include", default="*", help="Glob(s) to include, comma-separated.")
-    d.add_argument("--exclude", default=".git,.venv,node_modules,venv,.tox,.mypy_cache,.pytest_cache,__pycache__", help="Dir names to exclude, comma-separated.")
+    d.add_argument("--exclude", default=".git,.venv,node_modules,venv,.tox,.mypy_cache,.pytest_cache,__pycache__", help="Directory names to exclude, comma-separated.")
+    d.add_argument("--exclude-globs", default="*.lok,*.ser", help="Filename globs to skip (comma-separated).")
     d.add_argument("--max-file-size", type=int, default=5_000_000, help="Max file size in bytes to parse (default 5MB).")
     d.add_argument("--no-progress", action="store_true", help="Disable the progress bar during directory scans.")
     d.add_argument("--verbose", action="store_true", help="Enable verbose logging output.")
@@ -75,6 +76,7 @@ def run_dir(args: argparse.Namespace) -> int:
         logger=configure_logging(verbose=args.verbose),
         verbose=args.verbose,
         show_progress=not args.no_progress,
+        exclude_file_globs=[g.strip() for g in args.exclude_globs.split(",") if g.strip()],
     )
     scanner.scan()
 
